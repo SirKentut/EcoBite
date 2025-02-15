@@ -8,14 +8,20 @@ app.use(express.json());  // For parsing JSON bodies
 
 // 1. Flutter Client -> Backend Server
 // Endpoint to receive food image and return weight
-app.post('/analyze-food', (req, res) => {
+app.post('/analyze-food', async (req, res) => {
     console.log('Received request:', req.body);
 
     // TODO: (Subject to change) / suggested async functions below
     // 1. Receive food image
+
     // 2. Process through OpenAI/other classification (step 2 in diagram)
+
     // 3. Get volume from Volume Estimation System (step 3)
-    // 4. Query density from database (step 4)
+
+    // Step 4: Get densities for all detected foods
+    const densityResults = await getFoodDensity(detectedFoods);
+    console.log('Density results:', densityResults);
+    
     // 5. Calculate weight (step 5)
 
     res.json({
@@ -58,9 +64,27 @@ async function getVolumeEstimation(foodData) {
     // TODO: Call volume estimation system
 }
 
-// 4. Database interaction for food densities
-async function getFoodDensity(foodItem) {
-    // TODO: Query database for food density
+// 4. Database interaction for food densities// Add the density service function
+async function getFoodDensity(foods) {
+    try {
+        const response = await fetch('http://localhost:5000/density/process-foods', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ foods: foods })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return data.foods;
+    } catch (error) {
+        console.error('Error getting food density:', error.message);
+        throw error;
+    }
 }
 
 // 5. Weight calculation
