@@ -16,6 +16,11 @@ app.post('/analyze-food', (req, res) => {
     // 2. Process through OpenAI/other classification (step 2 in diagram)
     // 3. Get volume from Volume Estimation System (step 3)
     // 4. Query density from database (step 4)
+        /**
+         * How I can do this:
+         * - Create a flask service 
+         * - 
+         */
     // 5. Calculate weight (step 5)
 
     res.json({
