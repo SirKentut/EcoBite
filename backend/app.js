@@ -1,4 +1,5 @@
 const express = require('express');
+const axios = require('axios');
 
 const app = express();
 const PORT = 3000;
@@ -28,6 +29,14 @@ app.post('/analyze-food', async (req, res) => {
 
         // Expected results: Volume:{'rice': 340.0309850402668, 'vegetable': 65.82886736721441, 'chicken': 188.60914207925677} unit: cm^3
 
+        const volumeData = {
+            'chicken breast': 188.60914207925677,
+            'apple slices, dried': 65.82886736721441,
+            'potato chips': 340.0309850402668
+        };
+
+    console.log('Volume results:', volumeData);
+        
     // Step 4: Get densities for all detected foods
     const densityResults = await getFoodDensity(detectedFoods);
     console.log('Density results:', densityResults);
@@ -53,6 +62,7 @@ app.post('/analyze-food', async (req, res) => {
     
     // 5. Calculate weight (step 5) by taking the volume and density data
     const response  = calculateTotalWeight(volumeData, densityResults);
+    console.log('Weights calculated:', response);
     res.json(response);
 });
 
@@ -71,20 +81,15 @@ async function getVolumeEstimation(foodData) {
 // 4. Database interaction for food densities// Add the density service function
 async function getFoodDensity(foods) {
     try {
-        const response = await fetch('http://localhost:5000/density/process-foods', {
-            method: 'POST',
+        const response = await axios.post('http://localhost:5000/density/process-foods', {
+            foods: foods.foods  // Access the foods array from the input object
+        }, {
             headers: {
                 'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ foods: foods })
+            }
         });
         
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        return data.foods;
+        return response.data.foods;
     } catch (error) {
         console.error('Error getting food density:', error.message);
         throw error;

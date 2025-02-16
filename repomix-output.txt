@@ -1,0 +1,1269 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+================================================================
+File Summary
+================================================================
+
+Purpose:
+--------
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+File Format:
+------------
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Multiple file entries, each consisting of:
+  a. A separator line (================)
+  b. The file path (File: path/to/file)
+  c. Another separator line
+  d. The full contents of the file
+  e. A blank line
+
+Usage Guidelines:
+-----------------
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+Notes:
+------
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+
+Additional Info:
+----------------
+
+================================================================
+Directory Structure
+================================================================
+backend/
+  .gitignore
+  app.js
+  package.json
+flask/
+  data/
+    food_density_reference.csv
+  services/
+    density_service.py
+  .gitignore
+  app.py
+README.md
+
+================================================================
+Files
+================================================================
+
+================
+File: backend/.gitignore
+================
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Build directories
+dist/
+build/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+================
+File: backend/app.js
+================
+const express = require('express');
+
+const app = express();
+const PORT = 3000;
+
+// Middleware
+app.use(express.json());  // For parsing JSON bodies
+
+// 1. Flutter Client -> Backend Server
+// Endpoint to receive food image and return weight
+app.post('/analyze-food', async (req, res) => {
+    console.log('Received request:', req.body);
+
+    // TODO: (Subject to change) / suggested async functions below
+    // 1. Receive food image
+
+    // 2. Process through OpenAI/other classification (step 2 in diagram)
+
+    //expected json object format for detected food
+    const detectedFoods = {
+        "foods": [
+            {"name": "chicken breast"},
+            {"name": "apple slices, dried"},
+            {"name": "potato chips"}
+        ]
+    };
+    // 3. Get volume from Volume Estimation System (step 3)
+
+        // Expected results: Volume:{'rice': 340.0309850402668, 'vegetable': 65.82886736721441, 'chicken': 188.60914207925677} unit: cm^3
+
+        const volumeData = {
+            'chicken breast': 188.60914207925677,
+            'apple slices, dried': 65.82886736721441,
+            'potato chips': 340.0309850402668
+        };
+
+    // Step 4: Get densities for all detected foods
+    const densityResults = await getFoodDensity(detectedFoods);
+    console.log('Density results:', densityResults);
+    /*
+        [
+            {
+                "density": 1.07,
+                "food_name": "chicken breast",
+                "source": "api"
+            },
+            {
+                "density": 0.24,
+                "food_name": "apple slices, dried",
+                "source": "reference"
+            },
+            {
+                "density": 0.09,
+                "food_name": "potato chips",
+                "source": "reference"
+            }
+        ]
+    */
+    
+    // 5. Calculate weight (step 5) by taking the volume and density data
+    const response  = calculateTotalWeight(volumeData, densityResults);
+    res.json(response);
+});
+
+// 2. Backend -> Food Classification Service
+// This could be an internal function or separate service
+async function classifyFood(foodImage) {
+    // TODO: Integrate with OpenAI or other classification models
+}
+
+// 3. Backend -> Volume Estimation System
+// This could be an API call to your volume estimation service
+async function getVolumeEstimation(foodData) {
+    // TODO: Call volume estimation system
+}
+
+// 4. Database interaction for food densities// Add the density service function
+async function getFoodDensity(foods) {
+    try {
+        const response = await fetch('http://localhost:5000/density/process-foods', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ foods: foods })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return data.foods;
+    } catch (error) {
+        console.error('Error getting food density:', error.message);
+        throw error;
+    }
+}
+
+// 5. Weight calculation
+function gramsToLbs(grams) {
+    return grams * 0.00220462;
+}
+
+function calculateTotalWeight(volumeData, densityResults) {
+    // Initialize the response object
+    const response = {
+        weight: {
+            lbs: 0,
+            grams: 0,
+            breakdown: []
+        }
+    };
+
+    // Create a map of food names to densities for easy lookup
+    const densityMap = {};
+    densityResults.forEach(item => {
+        densityMap[item.food_name] = item.density;
+    });
+
+    // Calculate weight for each food item
+    for (const [foodName, volume] of Object.entries(volumeData)) {
+        // Skip if we don't have density data for this food
+        if (!densityMap[foodName]) {
+            console.warn(`No density data found for ${foodName}`);
+            continue;
+        }
+
+        // Calculate weight in grams (density * volume)
+        const weightGrams = volume * densityMap[foodName];
+        const weightLbs = gramsToLbs(weightGrams);
+
+        // Add to the breakdown
+        response.weight.breakdown.push({
+            foodItem: foodName,
+            weight: {
+                lbs: Number(weightLbs.toFixed(2)),
+                grams: Number(weightGrams.toFixed(2))
+            },
+            volume: `${volume.toFixed(1)}ml`,
+            density: densityMap[foodName]
+        });
+
+        // Add to totals
+        response.weight.grams += weightGrams;
+        response.weight.lbs += weightLbs;
+    }
+
+    // Round the totals
+    response.weight.grams = Number(response.weight.grams.toFixed(2));
+    response.weight.lbs = Number(response.weight.lbs.toFixed(2));
+
+    return response;
+}
+
+// Health check endpoint
+app.get('/ping', (req, res)=>{
+    res.status(200);
+    res.send("Pong: TreeHacks 2025");
+});
+
+app.listen(PORT, (error) =>{
+    if(!error)
+        console.log("Server is Successfully Running, and App is listening on port " + PORT)
+    else 
+        console.log("Error occurred, server can't start", error);
+    }
+);
+
+================
+File: backend/package.json
+================
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
+
+================
+File: flask/data/food_density_reference.csv
+================
+Food name,Density
+"Beverages, non alcoholic (including soft drinks and juices)",
+"Apple juice, canned or bottled, unsweetened, with added ascorbic acid",1.04
+"Apple juice, canned or bottled, unsweetened, without added ascorbic acid",1.04
+"Beverages, fruit juice drink, reduced sugar, with vitamin E added",1.04
+"Carbonated beverage, tonic water",1.02
+"Cranberry juice cocktail, bottled",1.05
+"Cranberry-apple juice drink, bottled",1.06
+"Fruit drinks, low calories, undiluted",
+"Fruit drinks, undiluted",
+Fruit juice,1.06
+Fruit juice drinks,
+"Fruit juice drinks, ready to drink",
+Grape juice,1.054
+"Grape juice, canned or bottled, unsweetened, with added ascorbic acid",1.06
+"Grape juice, canned or bottled, unsweetened, without added ascorbic acid",1.06
+"Guanabana nectar, canned",1.02
+"Guava nectar, canned",1.02
+"Ice, crushed",0.56-0.72
+"Juice, apple and grape blend, with added ascorbic acid",1.05
+"Juice, apple, grape and pear blend, with added ascorbic acid and calcium",1.05
+"Lemonade, frozen concentrate, pink",1.24
+"Lemonade, frozen concentrate, white",1.17
+"Lime juice cordial, undiluted",
+"Mango nectar, canned",1.00
+"Meal supplement drink, NESTLE, SUPLIGEN, canned, peanut flavor",1.04
+Orange juice,1.038
+Orange juice with calcium,1.038
+"Orange juice, canned, unsweetened",1.04
+Orange soda (sweetened with sugar),1.029
+"QUAKER OATS, PROPEL Fitness Water, fruit-flavored, non-carbonated",1.00
+"Soft drinks, cola type",
+"Soft drinks, diet soda",0.988
+"Soft drinks, lemonade type",
+"Soft drinks, lucozade type",
+Soy drink,1.08
+Soya + milk + sugar,1.05
+Soya + sugar,1.05
+"Sports drink, COCA-COLA, POWERADE, lemon-lime flavored, ready-to-drink",1.03
+"Sports drink, PEPSICO QUAKER GATORADE, GATORADE, original, fruit-flavored, ready-to-drink",1.03
+"Tamarind nectar, canned",1.01
+Water,
+"Water, ice, 0 °C",0.916
+"Water, ice, 4 °C",0.999
+"Water, liquid, 20 °C",0.998
+"Water, mineralwater",1.035-1.04
+"Tea, cacao, coffee and drinking powders",
+"Coffee, brewed",1
+"Coffee, expresso",1
+"Coffee, green (beans)",0.59-0.62
+"Coffee, powder (nescafé)",0.25
+"Coffee, roasted (beans)",0.35-0.38
+"Miso, broth, ready to drink",1.06
+"Powder, chocolate drinking powder",0.5-0.55
+Powders,0.2-0.25
+"Tea, black (tea leaves)",0.48
+"Tea, herbal, Ciakimora (leaves + water)",1
+"Tea, herbal, Ciakimora leaves ",0.23
+"Tea, flakes",0.38
+"Tea, powdered",0.43
+"Tea, liquid",1
+"Tea, only (tea leaves + water)",1
+"Tea, ready-to-drink, ARIZONA iced tea, with lemon flavor",1.03
+"Tea, ready-to-drink, LIPTON BRISK iced tea, with lemon flavor",1.03
+"Tea, ready-to-drink, NESTLE, COOL NESTEA ice tea lemon flavor",1.03
+"Beverages, alcoholic",
+Beer,
+"Beer, lager",
+"Beer, light",1.00
+"Beer, light, BUD LIGHT",1.00
+"Beer, light, BUDWEISER SELECT",1.00
+"Beer, light, MICHELOB ULTRA",1.00
+"Beer, local (non specific)",0.96
+"Beer, pale ale",
+"Beer, pilsner",1.007
+"Beer, pilsner, 4 °C",1.008
+"Beer, regular, all",1.01
+"Beer, regular, BUDWEISER",1.00
+"Beer, stout, bottled",
+"Beer, stout, extra",
+"Beer, strong ale",
+"Beer, type bitter or brown ale",
+"Beer, type draught",
+"Beer, type Keg",
+"Beer, type mild, draught",
+"Beer, commercial (white cap etc.)",0.97
+Spirits and liqueurs,
+"Alcohol, ethyl",0.789
+Amaretto,
+Amaretto di Saranno,
+Anisette,
+Apricot brandy,
+Apricot liquor,
+Bailey's irish cream,
+Benedictine,
+Benedictine D.O.M.,
+Blackberry brandy,
+Blackberry liquor,
+Blue curacao,
+Brandy,
+Campari,
+Cherry brandy,
+Cherry liqueur,
+Coffee liquor,
+Cointreau,
+Crème de almond,
+Crème de banana,
+Crème de cacao,
+Creme de cassis,
+Crème de noyaux,
+Drambuie,
+Frangelico,
+Galliano,
+Green chartreuse,
+Green crème de menthe,
+Kummel,
+Liqueur,1.03-1.150
+"Liqueur, type advocaat",
+"Liqueur, type cherry brandy",
+"Liqueur, type curacao",
+Midori melon liquor,
+Orange curacao,
+Parfrait d'amour,
+Peach brandy,
+Peach liqueur,
+Peppermint schnapps,
+Port,
+Rock and Rye,
+"Sherry, dry",
+"Sherry, medium",
+"Sherry, sweet",
+Sloe gin,
+Southern comfort,
+"Spirits, 40% alcohol",
+"Spirits, 45% alcohol (whiskey)",0.939
+"Spirits, 70% alcohol",0.885
+"Spirits, 75% alcohol",0.873
+Strawberry liqueur,
+Tia Maria,
+Triple sec,
+Tuaca,
+"Vermouth, dry",
+"Vermouth, sweet",
+White crème de cacao,
+White crème de menthe,
+Yellow chartreuse,
+Wine and Cider,
+"Cider, dry",
+"Cider, sweet",
+"Cider, vintage",
+"Wine, red",
+"Wine, rose, medium",
+"Wine, table, all",0.99
+"Wine, table, red",0.99
+"Wine, table, red, Barbera",0.99
+"Wine, table, red, Burgundy",1.00
+"Wine, table, red, Cabernet Franc",0.99
+"Wine, table, red, Cabernet Sauvignon",0.99
+"Wine, table, red, Carignane",0.99
+"Wine, table, red, Claret",0.99
+"Wine, table, red, Gamay",0.99
+"Wine, table, red, Lemberger",0.99
+"Wine, table, red, Merlot",0.99
+"Wine, table, red, Mouvedre",0.99
+"Wine, table, red, Petite Sirah",0.99
+"Wine, table, red, Pinot Noir",0.99
+"Wine, table, red, Sangiovese",0.99
+"Wine, table, red, Syrah",0.99
+"Wine, table, red, Zinfandel",0.99
+"Wine, table, white",0.99
+"Wine, table, white, Chardonnay",0.99
+"Wine, table, white, Chenin Blanc",1.00
+"Wine, table, white, Fume Blanc",0.99
+"Wine, table, white, Gewurztraminer",0.99
+"Wine, table, white, late harvest",1.04
+"Wine, table, white, late harvest, Gewurztraminer",1.03
+"Wine, table, white, Muller Thurgau",1.00
+"Wine, table, white, Muscat",1.01
+"Wine, table, white, Pinot Blanc",0.99
+"Wine, table, white, Pinot Gris (Grigio)",0.99
+"Wine, table, white, Riesling",1.00
+"Wine, table, white, Sauvignon Blanc",0.99
+"Wine, table, white, Semillon",1.00
+"Wine, white",1-1.04
+"Wine, white, dry or sparkling",
+"Wine, white, medium",
+"Wine, white, sweet",
+Milk and dairy products,
+Milk ,
+Milk (at 15.6 C),
+Milk (non-fat dry),0.56
+Milk (powdered whole),0.56
+Milk (powdered),0.21
+"Milk shake, fruit and other",1
+"Milk, acidophilus cultured",1.01
+"Milk, buttermilk",1.022
+"Milk, chocolate milk, skimmed",1.056
+"Milk, cow, whole",1.04
+"Milk, evaporated",
+"Milk, goat, whole",1.08
+"Milk, liquid (whole, semi-skimmed, skimmed)",
+"Milk, liquid, partially skimmed",1.034
+"Milk, liquid, skimmed",1.033
+"Milk, liquid, skimmed",1.036
+"Milk, liquid, whole",1.030
+"Milk, liquid, whole",1.031
+Dairy products,
+Butter,0.911
+"Butter, margarine",0.96
+"Buttermilk, dried",0.5
+Casein,0.58
+"Cheese, emmentaler, grated",0.34
+"Cream, 13% fat",1.013
+"Cream, 38% fat",0.984
+"Cream, 9% fat",1.017
+"Cream, double (about 40-50% fat)",
+"Cream, heavy",0.994
+"Cream, light",1.012
+"Cream, single (about 20% fat)",
+"Cream, sour (crème fraiche about 18% fat)",1.005
+"Cream, sour (crème fraiche about 38% fat)",0.978
+"Cream, whipped",0.496
+"Cream, whipping (about 40% fat)",
+Ice cream ,0.554
+"Ice cream, dairy",
+"Ice cream, light (formerly ice milk)",0.56
+"Ice cream, light, no sugar added",0.58
+"Ice cream, no sugar added",0.54
+"Ice cream, non dairy",
+"Ice cream, regular",0.56
+"Ice cream, rich",0.62
+"Sour milk, cow, whole",0.98
+"Yoghurt, berry, low fat, artificially sweetened",1.06
+"Yoghurt, fruits",1.045-1.06
+"Yoghurt, low fat, fruit",
+"Yoghurt, plain, unsweetened",1.06
+"Yoghurt, plain, unsweetened",1.031
+"Yoghurt, strawberry, low fat",1.08
+Oils and fats,
+Oils,
+"Cooking oil, elianto oil, salad, golden fry, rina",0.88
+"Cooking oil, sima",0.88
+"Cooking oil, tily, chipo, pura",0.88
+"Oil, cod (at 15.6 C)",
+"Oil, corn (at 15.6 C)",
+"Oil, cotton seed (at 15.6 C)",
+"Oil, lard (at 15.6 C)",
+"Oil, linseed (at 15.6 C)",
+"Oil, olive (at 15.6 C)",
+"Oil, other than palmoil",0.92
+"Oil, palm (at 15.6 C)",
+"Oil, palmoil",0.89
+"Oil, peanut (at 15.6 C)",
+"Oil, rapeseed (at 20 C)",
+"Oil, seasame seed (at 15.6 C)",
+"Oil, sunflower",0.96
+"Oil, vegetable, coconut",0.924
+"Oil, vegetable, corn",0.922
+"Oil, vegetable, olive",0.918
+"Oil, vegetable, palm",0.915
+"Oil, vegetable, peanut",0.914
+"Oil, vegetable, soya",0.927
+"Oil, whale (at 15.6 C)",
+Fats and other,
+Animal fat,0.7
+Lard,0.919
+Lard (at 15.6 C),
+"Mayonnaise, light",1
+"Mayonnaise, traditional",0.91
+Solid vegetable fat kimbo,0.6
+Solid vegetable fat rina ,0.67
+Cereal and cereal products,
+Barley,0.62
+"Barley malt, flour",0.72
+"Barley, fine ground",0.74
+"Barley, meal",0.45
+"Barley, flour",0.61
+"Barley, flour, malted ",0.64
+"Barley, ground",0.38-0.42
+"Barley, malted",0.49
+"Barley, rolled",0.34-0.38
+"Barley, scoured",0.66
+"Barley, whole",0.61-0.69
+Biscuits,0.41-0.53
+Bran,0.56
+Bread,0.29
+"Bread, cornbread ",0.433
+"Bread, roll, soft",0.18
+"Bread, white",0.42
+"Bread, white, sliced, prepacked",0.29
+Breadcrumbs,0.45
+"Breakfast cereal, cornflakes (dry cereal) ",0.117
+"Breakfast cereal, muesli w/ fruits&nuts",0.37
+"Breakfast cereal, raisin bran",0.26
+"Breakfast cereal, type Cheerios",0.13
+"Breakfast cereal, type Corn flakes",0.1
+"Breakfast cereal, type Crispix",0.13
+"Breakfast cereal, type frosted flakes",0.18
+"Breakfast cereal, type Just Right",0.24
+"Breakfast cereal, type rice krispies",0.12
+"Buckwheat, bran",0.25
+"Buckwheat, flour",0.66
+"Buckwheat, whole",0.59-0.66
+"Bulrush mille, fermented flour",0.56
+Cake ,0.415
+Cake mix,0.7
+"Corn/maize flour, white",0.55
+"Corn/maize starch, loosely packed",0.54
+Corn/maize sugar,0.33
+"Corn/maize, boiled",0.90
+"Corn/maize, boiled with fat",0.90
+"Corn/maize, bran",0.21
+"Corn/maize, chops (coarse)",0.64-0.70
+"Corn/maize, chops (fine)",0.58-0.62
+"Corn/maize, chops (medium)",0.61-0.67
+"Corn/maize, cobs",0.27
+"Corn/maize, cracked (coarse)",0.64
+"Corn/maize, ear",0.9
+"Corn/maize, ear",0.9
+"Corn/maize, fermented flour ",0.55
+"Corn/maize, flour",0.82
+"Corn/maize, meal",0.64
+"Corn/maize, flour ",0.62
+"Corn/maize, germ flour",0.56
+"Corn/maize, gluten flour",0.51-0.69
+"Corn/maize, grits",0.64-0.69
+"Corn/maize, ground",0.54-0.58
+"Corn/maize, kibbled",0.32-0.35
+"Corn/maize, mash",0.72
+"Corn/maize, shelled",0.72
+"Corn/maize, starch",0.67
+"Corn/maize, starch, tightly packed",0.63
+"Corn/maize, white, boiled",0.85
+"Corn/maize, white, dry",0.81
+"Corn/maize, whole kernel, dried, cracked (Njenga)",0.81
+"Corn/maize, whole kernel, dried, cracked, boiled (Njenga)",1.07
+"Corn/maize, whole shelled",0.72
+Donut mix,0.64
+Dough mix,0.59
+"Finger millet, fermented flour",0.61
+Millet,0.64
+Millet,0.64
+"Millet flour, bulrush",0.56
+"Millet flour, finger",0.61
+"Millet, bulrush",0.90
+"Millet, finger",0.81
+Oat Flour,0.53
+Oat middlings,0.61
+Oats,0.41
+Oats,0.43
+"Oats groats, whole",0.74
+"Oats, ground",0.46
+"Oats, hulls",0.13
+"Oats, rolled",0.30-0.38
+"Pasta, short macaroni style, boiled",0.55
+"Pasta, short macaroni style, raw",0.39
+"Pasta/ noodles, boiled",0.59
+"Porridge flour bonavist, boiled",0.73
+"Porridge flour bonavist, raw",0.84
+Porridge flour ken-uji + lemon extract,0.54
+"Porridge flour ken-uji:F.mill, bul, sorg, wheat",0.60
+"Porridge, maize, flour + water",1.05
+Rice,0.72
+"Rice, boiled",0.73
+"Rice, boiled with fat",0.70
+"Rice, bran",0.42
+"Rice, hulled",0.75
+"Rice, puffed",0.1
+"Rice, raw",0.85
+"Rice, rough",0.58
+"Rice, white, boiled",0.73
+"Rice, white, raw",0.82
+Rye,0.72
+"Rye, bran",0.24-0.32
+"Rye, flour ",0.67
+"Rye, malted",0.51
+"Rye, middlings",0.67
+"Rye, shorts",0.54
+"Rye, whole",0.69-0.72
+"Semolina, raw",0.78
+"Sorghum, fermented flour",0.54
+"Sorghum, flour",0.54
+"Sorghum, seed",0.51-0.56
+"Soy, flour ",0.7
+"Soya, flour ",0.64
+Wheat,0.77
+"Wheat, bran",0.18-0.26
+"Wheat, cracked",0.56
+"Wheat, cut",0.74
+"Wheat, flour",0.48
+"Wheat, flour",0.58
+"Wheat, flour ",0.67
+"Wheat, flour ",0.521
+"Wheat, flour, malted",0.66
+"Wheat, flour, white",0.67
+"Wheat, flour, wholemeal",0.55
+"Wheat, gluten",0.69
+"Wheat, hulls",0.7
+"Wheat, middlings",0.24
+"Wheat, shaved",0.54
+"Wheat, whole",0.72-0.83
+Whey,0.56
+Tubers and products,
+"Arrowroot/cocoyam, boiled",0.54
+"Arrowroot/cocoyam, raw",0.52
+"Cassava,flour",0.55
+"Cassava, boiled",0.63
+"Cassava, raw",0.63
+"Potato, english, boiled",0.59
+"Potato, english, raw",0.59
+"Potatoes, flakes",0.21
+"Potatoes, powdered",0.77
+"Sweet potato, boiled",0.65
+"Sweet potato, raw",0.44
+"Yam, boiled",0.79
+"Yam, raw",0.66
+Nuts and seeds,
+Almonds,0.46
+Cashews,0.5
+Coconut Chips,0.61
+Flaxseed,0.7
+Nuts,0.63
+Peanuts,0.53
+"Peanuts, shelled",0.69
+"Peanuts, unshelled",0.27-0.38
+"Pistachio, raw, with shell",0.6
+"Pistachio, raw, without shell",0.646
+Rapeseed,0.77
+"Sunflower, seed",0.62
+Fruits,
+"Apple slices, dried",0.24
+Loquat,0.6
+"Paw Paw, unripe",0.56
+Vegetables,
+"Alfalfa, leaf, meal",0.23
+"Alfalfa,meal, dehydrated 13%",0.26-0.29
+"Alfalfa, meal, dehydrated 17%",0.29-0.35
+"Alfalfa, meal, fine ground",0.24-0.35
+"Alfalfa, meal, suncured 13%",0.22
+"Alfalfa, seed",0.72-0.77
+"Alfalfa, stem meal",0.19
+"Carrot, raw, chopped",0.54
+"Carrot, raw, grated",0.71
+"Cauliflower, boiled",0.45
+"Chili, green",0.5
+"Chili, red",0.5
+French green beans,0.53
+Fresh green peas (minji),0.73
+"Leaves, managu, raw (black night shade)",0.2
+"Leaves, onion, spring onion, raw",0.44
+"Corn/maize, green, sweet corn, boiled",0.73
+"Corn/maize, green, sweet corn, raw",0.61
+"Olives, green, with stone",0.65
+"Onions, chopped",0.22
+"Onions, minced",0.13
+"Onions, powdered",0.4
+"Onions, fried, cubed",0.75
+"Onions, raw, cubed",0.55
+"Salad, green, leaves, raw",0.06
+"Spinach, frozen, cooked",1.046
+"Spinach, leaves, raw",0.08
+"Sweet pepper, raw, cubes",0.51
+"Sweet pepper, raw, half rings",0.39
+Legumes,
+"Beans, white",0.69-0.77
+Cowpeas,0.72
+"Cowpeas, dried, boiled",0.75
+"Cowpeas, dried, raw",0.96
+"Greengram, boiled",0.76
+"Greengram, raw",0.79
+"Kidney beans, dry, boiled",0.79
+"Kidney beans, dry, raw",0.75
+"Kidney beans, green, boiled",0.7
+"Kidney beans, green, raw",0.68
+"Lentils, green, small, boiled",0.85
+"Lentils, green, small, raw",0.89
+"Pigeon peas, boiled",0.75
+"Pigeon peas, raw",0.84
+Soybean,0.74
+"Soybean, flakes",0.58
+"Soybean, hulls",0.4
+"Soybean, meal",0.64
+"Soybean, boiled",0.79
+"Soybean, boiled with fat",0.70
+Herbes and spices,
+"Cinnamon, powder",0.56
+"Clover, seed",0.77
+Dry flavoring mix Roiko and other flavorings,0.7
+"Garlic, flakes",0.35
+"Garlic, powder",0.32
+"Sage, leaves",0.29
+"Spice, barbecue",0.48
+"Spice, blend",0.58
+Fish and fish products,
+"Prawns, whole, boiled, with shell",0.58
+"Prawns, whole, boiled, without shell",0.77
+Egg and egg products,
+"Egg, yoke, powder",0.37
+"Egg, chicken, boiled/poached",0.6
+"Eggs, powdered",0.35
+Meat and meat products,
+"Blood, flour",0.48
+"Blood, meal",0.62
+"Bone and meat meal, loose",0.72
+"Bone meal, loose",0.80-0.96
+"Cow intestine, boiled",0.58
+"Cow, lean, no bone, raw",0.96
+"Cow, intestine, raw",0.93
+"Goat, intestine, boiled",0.56
+"Goat, intestine, raw",0.83
+"Pork, fatty, with bone, boiled",0.63
+"Pork, fatty, with bone, raw",0.97
+"Pork, medium, with bone, boiled",0.7
+"Pork, medium, with bone, raw",0.93
+Snacks,
+Potato chips,0.09
+"Potato chips, pringles",0.12
+"Snacks, puffed, lowfat",0.11
+Sweets,
+"Glucolin, glucose",0.4
+Glucose (at 15.6 C),
+Jam ,1.333
+"Jam, sweetened",1.43
+Jelly ,1.245
+Nutella,1.26
+Sucrose,0.85
+Sucrose Octoacetate,0.53
+Sugar,0.95
+"Sugar, dextrose",0.62
+"Sugar, dextrose",0.58
+"Sugar, granulated",0.7
+"Sugar, powdered",0.56
+"Sugar, white",0.9
+"Sugar, white",0.88
+"Syrup, blackcurrant, undiluted",
+"Syrup, corn",1.38
+"Syrup, corn, light",1.40
+"Syrup, fruit, blackberry",1.34
+"Syrup, grenadine",
+"Syrup, maple",1.32
+"Syrup, pancake ",1.312
+Miscellaneous foods,
+Baking powder,0.9
+Gelatin,0.72
+Monosodium glutamate,1.62
+Mustard powdered,0.26
+Protein supplement,0.54
+Salad dressing,1.1
+"Salt, sodium chloride",2.165
+"Salt, fine table",1.38
+"Salt, granulated",1.28
+"Salt, table",1.217
+"Sauce, soy",1.12
+Sodium bicarbonate,2.2
+Vitamin additive,0.66
+Vitamin compound,0.67
+Vitamin enrichment,0.64
+Vitamin mix,0.7
+Vitamin powder,0.56
+Yeast,0.95
+Soups,
+Bean soup,1.054
+Cheddar cheese soup,1.046
+Chicken noodle soup,1
+Egg drop soup,1.017
+Mushroom soup,1.017
+"Soup, meat",1.04
+"Soup, mixed",1.05
+"Soup, thick (squash, potato)",1.09
+"Soup, vegetable",0.99
+Tomato soup,1.017
+Mixed dishes,
+Beef and noodles (no sauce),0.65
+Beef and noodles in gravy (mixture),1.04
+"Beef stew, canned",1.05
+"Beef, noodles and vegetables (no sauce)",0.68
+Broccoli casserole,0.95
+Cheese tortellini,1.03
+Chicken and dumplings (mixture),1.04
+Eggplant parmesan,0.83
+Githeri (muthugo + beans) + meat,0.95
+Githeri (muthugo + beans) + meat + vegetable + potato/banana,0.99
+"Githeri (muthugo + beans) + onion, boiled with fat",0.98
+Githeri (muthugo + beans) + potato/banana,0.88
+Githeri (muthugo + beans) + vegetable,1.04
+Githeri (muthugo + beans) + vegetable + meat,0.94
+Githeri + meat,0.75
+Githeri + meat + vegetable + potato/banana,1.05
+"Githeri + onion, boiled with fat",0.83
+Githeri + peas,1.04
+Githeri + potato/banana,1.10
+Githeri + roots + vegetable,1.13
+Githeri + vegetable,1.30
+Githeri + vegetable + meat,0.84
+Githeri + vegetable + potato/banana,0.95
+Githeri plain (muthugo + beans + water),0.98
+"Githeri, beans + vegetable + potatoes",0.93
+"Githeri, maize + peas",0.97
+"Githeri, plain (maize + beans + water)",0.71
+"Gitwero, banana + beans",1.20
+"Gitwero, banana + beans + vegetable",1.20
+"Gitwero, banana + potato + beans",1.04
+"Gitwero, banana + vegetable",1.20
+"Gitwero, banana, boiled with fat",1.19
+"Gitwero, banana/potato",1.30
+"Gitwero, banana/potato + meat",1.08
+"Gitwero, banana/potato + vegetable",1.22
+"Gitwero, root (yam, arrowroot, etc.)",1.14
+"Gitwero, roots + banana",1.03
+"Gitwero, roots + banana",1.03
+Green bean casserole,0.95
+Lasagna,1.04
+"Macaroni and cheese, canned",1.00
+"Mataha (Maize stew) (Maize stew), maize + peas",0.86
+"Mataha (maize stew), beans + banana",1.22
+"Mataha (maize stew), beans + banana + potato",1.25
+"Mataha (maize stew), beans + banana + potato + vegetable",1.15
+"Mataha (maize stew), beans + potato/banana + vegetable",1.14
+"Mataha (maize stew), beans + vegetable",1.02
+"Mataha (maize stew), beans + vegetable + banana",1
+"Mataha (maize stew), maize + banana",1.09
+"Mataha (maize stew), maize + banana/potato + vegetable",1.10
+"Mataha (maize stew), maize + beans + potato",0.75
+"Mataha (maize stew), maize + beans + potato + vegetable",0.95
+"Mataha (maize stew), maize + beans + potato, boiled with fat",0.75
+"Mataha (maize stew), maize + beans + vegetable + banana",0.70
+"Mataha (maize stew), maize + vegetable",0.90
+"Mataha (maize stew), paw paw",1.33
+"Mexican casserole w/beef, beans, cheese, chips",0.6
+"Mini ravioli, canned",1.05
+Moussaka,0.85
+Muthugo (maize without germ and cover) only,0.76
+Noodles/pasta with fat,0.80
+Rice + beans,0.75
+Rice + beans + potato/banana,0.85
+Rice + meat,0.73
+Rice + meat + vegetable,0.83
+Rice + potato/banana,0.80
+"Rice + roots (yam, arrowroot etc.)",0.90
+Rice + vegetable,0.65
+Rice + vegetable + potato/banana,0.80
+"Rice, plain (rice + water)",0.70
+"Spaghetti and meat balls, canned",1.04
+"Stew, banana",1.07
+"Stew, banana + potato + vegetable",1.06
+"Stew, beans",1.01
+"Stew, beans/ peas + meat + vegetables",0.94
+"Stew, beans/ peas + vegetables",1.07
+"Stew, meat",1.12
+"Stew, pea + potato/banana",1.10
+"Stew, pea + potato/banana + vegetable",1.22
+"Stew, potato",1.10
+"Stew, potato + beans + vegetable",1.08
+"Stew, vegetable",0.68
+"Stew, vegetable + meat",0.86
+"Stew, vegetable + potato",1.10
+"Stew, vegetable + potato + meat",1.08
+Stew: eggs + veg,0.68
+Tuna noodle casserole,0.93
+Ugali + beans,0.80
+Ugali + beans + vegetable,0.80
+"Ugali + vegetable, crumbed",0.75
+"Ugali + vegetables, boiled with fat",1.20
+"Ugali, plain (flour + water), crumbed",0.75
+Wieners and sauerkraut (mixture),0.61
+Zesty Italian ‘‘hamburger helper’’,1.04
+
+================
+File: flask/services/density_service.py
+================
+from flask import Blueprint, jsonify, request
+from openai import OpenAI
+from dotenv import load_dotenv
+import os
+import logging
+from typing import Optional, Dict, List, Union, Tuple
+from functools import lru_cache
+import pandas as pd
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# Load environment variables
+load_dotenv()
+
+# Create blueprint for density service
+density = Blueprint('density', __name__)
+
+# Initialize Perplexity client
+client = OpenAI(
+    api_key=os.getenv('PERPLEXITY_API_KEY'),
+    base_url="https://api.perplexity.ai"
+)
+
+@lru_cache(maxsize=1)
+def load_reference_file() -> Tuple[Optional[Dict[str, float]], Optional[str]]:
+    """
+    Load the reference CSV file containing food density values.
+    Returns a tuple of (density_dict, reference_text).
+    density_dict maps food names to their density values.
+    reference_text is the formatted text to be used in the API prompt.
+    """
+    try:
+        # Use relative path from the Flask app root
+        csv_path = 'data/food_density_reference.csv'
+        logger.info(f"Attempting to load CSV from relative path: {csv_path}")
+        
+        df = pd.read_csv(csv_path)
+        logger.info(f"Successfully loaded CSV with {len(df)} rows")
+        logger.info(f"CSV columns: {df.columns.tolist()}")
+        logger.info("First few rows of DataFrame:")
+        logger.info(df.head())
+        
+        # Process the CSV data to create a dictionary and reference text
+        density_dict = {}
+        reference_lines = []
+        
+        for _, row in df.iterrows():
+            # Skip empty rows or headers
+            if pd.isna(row['Food name']) or pd.isna(row['Density']):
+                continue
+                
+            # Get the food name and clean it
+            food_name = str(row['Food name']).strip().strip('"').lower()
+            density_str = str(row['Density']).strip()
+            
+            # Skip category headers and empty food names
+            if not food_name or food_name.endswith(',') or pd.isna(density_str):
+                continue
+                
+            try:
+                # Handle range values (e.g., "0.56-0.72")
+                if '-' in density_str:
+                    low, high = map(float, density_str.split('-'))
+                    density_value = (low + high) / 2
+                else:
+                    density_value = float(density_str)
+                
+                density_dict[food_name] = density_value
+                reference_lines.append(f"{food_name}: {density_value} g/ml")
+                logger.debug(f"Added density for {food_name}: {density_value}")
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Failed to parse density for {food_name}: {str(e)}")
+                continue
+                
+        logger.info(f"Successfully loaded {len(density_dict)} reference density values")
+        if density_dict:
+            # Log some sample entries
+            sample_entries = list(density_dict.items())[:5]
+            logger.info("Sample entries from parsed data:")
+            for food, density in sample_entries:
+                logger.info(f"  {food}: {density} g/ml")
+                
+        reference_text = "\n".join(reference_lines)
+        return density_dict, reference_text
+        
+    except Exception as e:
+        logger.error(f"Failed to load reference file: {str(e)}")
+        return None, None
+    
+def get_density(food_name: str) -> Tuple[Optional[float], str]:
+    """
+    Get food density by first checking the reference CSV, then falling back to Perplexity API.
+    Returns a tuple of (density_value, source) where source is either "reference" or "api"
+    """
+    # Load reference data
+    density_dict, reference_text = load_reference_file()
+    
+    # Check for exact match in reference data
+    if density_dict and food_name.lower() in density_dict:
+        density = density_dict[food_name.lower()]
+        logger.info(f"Found exact match in reference data for {food_name}: {density}")
+        return round(density, 3), "reference"
+    
+    # # Check for contains match in reference data
+    # if density_dict:
+    #     # Get all matching foods that contain the search term
+    #     matches = [(name, value) for name, value in density_dict.items() 
+    #               if food_name.lower() in name]
+        
+    #     # If we found matches, use the first one
+    #     if matches:
+    #         food_name, density = matches[0]
+    #         logger.info(f"Found contains match in reference data for {food_name}: {density}")
+    #         return round(density, 3)
+
+    # If no exact match, query Perplexity API with reference data
+    system_content = (
+        "You are a precise scientific assistant specializing in food science and density measurements. "
+        "Your responses must follow these rules:\n"
+        "1. Provide only a single numerical value in g/ml (grams per milliliter)\n"
+        "2. Round all values to 3 decimal places\n"
+        "3. If a food has multiple forms (e.g., raw vs cooked), assume its most common consumed form\n"
+        "4. If uncertain, provide your best estimate based on similar foods\n"
+        "5. Do not include units, explanations, or any other text\n"
+        "6. If the query is invalid or non-food, respond with '0.000'"
+    )
+    
+    if reference_text:
+        system_content += f"\n\nRefer to the following reference densities for guidance:\n\n{reference_text}"
+
+    messages = [
+        {
+            "role": "system",
+            "content": system_content
+        },
+        {
+            "role": "user",
+            "content": f"What is the density of {food_name}?"
+        }
+    ]
+
+    try:
+        response = client.chat.completions.create(
+            model="sonar-pro",
+            messages=messages,
+        )
+        
+        density_str = response.choices[0].message.content.strip()
+        try:
+            density = round(float(density_str), 3)
+            logger.info(f"Successfully got density from API for {food_name}: {density}")
+            return density, "api"
+        except ValueError:
+            logger.error(f"Invalid density value '{density_str}' for {food_name}")
+            return None, "api"
+            
+    except Exception as e:
+        logger.error(f"Perplexity API error for {food_name}: {str(e)}")
+        return None, "api"
+
+@density.route('/process-foods', methods=['POST'])
+def process_foods() -> tuple[Dict[str, Union[str, List[Dict[str, Union[str, float]]]]], int]:
+    """
+    Process a list of foods to get their densities.
+    First checks reference CSV for exact matches, then falls back to Perplexity API.
+    
+    Expected request format:
+    {
+        "foods": [
+            {"name": "apple"},
+            {"name": "banana"}
+        ]
+    }
+    
+    Returns:
+        Tuple containing response dict and status code
+    """
+    if not request.is_json:
+        return jsonify({
+            'error': 'Content-Type must be application/json',
+            'foods': []
+        }), 400
+    
+    try:
+        data = request.get_json()
+    except Exception as e:
+        logger.error(f"Failed to parse JSON: {str(e)}")
+        return jsonify({
+            'error': 'Invalid JSON format',
+            'foods': []
+        }), 400
+    
+    if not isinstance(data, dict) or 'foods' not in data:
+        return jsonify({
+            'error': 'Request must include a "foods" list',
+            'foods': []
+        }), 400
+    
+    foods = data['foods']
+    if not isinstance(foods, list):
+        return jsonify({
+            'error': 'Foods must be a list',
+            'foods': []
+        }), 400
+        
+    processed_foods = []
+    for food in foods:
+        if not isinstance(food, dict) or 'name' not in food:
+            logger.warning(f"Skipping invalid food item: {food}")
+            continue
+            
+        density_value, source = get_density(food['name'])
+        
+        processed_foods.append({
+            "food_name": food['name'],
+            "density": density_value if density_value is not None else 0.000,
+            "source": source
+        })
+    
+    return jsonify({
+        'foods': processed_foods
+    }), 200
+
+================
+File: flask/.gitignore
+================
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+*.pyc
+
+================
+File: flask/app.py
+================
+# app.py
+
+from flask import Flask, jsonify, request
+from datetime import datetime
+from services.density_service import density
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize Flask app
+app = Flask(__name__)
+
+# Register the blueprint
+app.register_blueprint(density, url_prefix='/density')
+
+# Basic error handling
+class APIError(Exception):
+    """Base class for API errors"""
+    def __init__(self, message, status_code=400):
+        super().__init__()
+        self.message = message
+        self.status_code = status_code
+
+@app.errorhandler(APIError)
+def handle_api_error(error):
+    response = jsonify({'error': error.message})
+    response.status_code = error.status_code
+    return response
+
+# Routes
+@app.route('/')
+def home():
+    return jsonify({
+        'message': 'Welcome to the Flask API for Food Density Service.',
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat()
+    })
+
+@app.route('/echo', methods=['POST'])
+def echo():
+    if not request.is_json:
+        raise APIError('Content-Type must be application/json')
+    
+    data = request.get_json()
+    return jsonify({
+        'message': 'Echo response',
+        'data': data,
+        'timestamp': datetime.now().isoformat()
+    })
+
+# Health check endpoint
+@app.route('/health')
+def health_check():
+    return jsonify({
+        'status': 'Healthy: TreeHacks 2025',
+        'timestamp': datetime.now().isoformat()
+    })
+
+if __name__ == '__main__':
+    # Enable hot reloading and run on localhost
+    app.run(host='0.0.0.0', port=5000, debug=True)
+
+================
+File: README.md
+================
+# EcoBite
+Submission for TreeHacks 2025
+
+
+
+================================================================
+End of Codebase
+================================================================
