@@ -5,6 +5,8 @@ from datetime import datetime
 from services.density_service import density
 import logging
 
+from ai.predictor import Predictor
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -58,6 +60,25 @@ def health_check():
         'timestamp': datetime.now().isoformat()
     })
 
+@app.route('/predict', methods=['POST'])
+def predict():
+    if not request.is_json:
+        raise APIError('Content-Type must be application/json')
+
+    data = request.get_json()
+    image = data['image']
+
+    predictor = Predictor(image)
+
+    food_prediction = predictor.get_foods()
+    volume_prediction, map = predictor.get_volume(food_prediction)
+    weight_prediction, map = predictor.get_weight(map)
+
+    return jsonify({
+        'response': map,
+        'timestamp': datetime.now().isoformat()
+    })
+
 if __name__ == '__main__':
     # Enable hot reloading and run on localhost
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True)
