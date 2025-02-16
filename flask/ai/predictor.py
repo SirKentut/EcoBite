@@ -5,6 +5,9 @@ import re
 import requests
 import json
 
+from . import utils
+
+
 class Predictor:
 
     client = None
@@ -16,7 +19,7 @@ class Predictor:
         self.image_path = image_path
 
     def get_foods(self):
-        file = self.client.files.upload(file=self.image_path)
+        file = utils.upload_file_to_gemini(self.image_path, self.client)
         prompt = ("You are given an image of some food that may be uneaten or partially eaten. "
                   "Your task is to figure out all the different foods in the image and name them in JSON format. "
                   "The JSON should have one key called 'foods' that holds an array of food names (strings). "
@@ -33,7 +36,7 @@ class Predictor:
         return foods
 
     def get_volume(self, foods):
-        file = self.client.files.upload(file=self.image_path)
+        file = utils.upload_file_to_gemini(self.image_path, self.client)
         prompt2 = ("You are given an image of some food that may be uneaten or partially eaten. "
                    "Your task is to figure out the volume of the foods (in Liters) in the image. "
                    "The foods in the images are: " + foods + "\n\n"
@@ -47,8 +50,8 @@ class Predictor:
         response = self.client.models.generate_content(
             model="gemini-2.0-flash",
             contents=[prompt2, file])
-        print("VOLUME RESPONSE")
-        print(response.text)
+        # print("VOLUME RESPONSE")
+        # print(response.text)
         map = self.parse_volume_json(response.text)
         return response.text, map
 
@@ -68,15 +71,17 @@ class Predictor:
         response = self.client.models.generate_content(
             model="gemini-2.0-flash",
             contents=[prompt2])
-        print("WEIGHT RESPONSE")
-        print(response.text)
+        # print("WEIGHT RESPONSE")
+        # print(response.text)
         map = self.parse_volume_json(response.text)
         return response.text, map
 
     def get_description(self):
-        file = self.client.files.upload(file=self.image_path)
+        file = utils.upload_file_to_gemini(self.image_path, self.client)
         prompt = ("You are given an image of some food. Your goal is to analyze the food contents and "
-                  "create a suitable name for the dish as well as a brief description of the dish.\n\n"
+                  "create a suitable name for the dish as well as a brief description of the dish. In the"
+                  " description, include details, like a percentage, about how much of the dish has been "
+                  "wasted.\n\n"
                   "Rules to follow in your response:\n"
                   "1. Show your thought process\n"
                   "2. After showing your thought process, format your response in JSON. "
@@ -94,11 +99,6 @@ class Predictor:
         map = self.parse_description_json(response.text)
 
         return map
-
-    def download_image(self):
-        img_data = requests.get(self.image_path).content
-        with open(self.image_path+'.jpg', 'wb') as handler:
-            handler.write(img_data)
 
     def parse_food_json(self, input_string):
         # Regular expression to find the content inside <json> tags
