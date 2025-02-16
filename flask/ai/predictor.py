@@ -24,10 +24,10 @@ class Predictor:
                   "To figure out the foods, follow these steps:\n"
                   "1. Isolate the foods if multiple foods exist in the image."
                   "2. Use your knowledge base to categorize each food\n"
-                  "Here is an example JSON output that I expect from you: \n"
+                  "Here is an example JSON response that I expect from you: \n"
                   "<json>{foods: ['apple', 'orange', 'chicken']}</json>")
         response = self.client.models.generate_content(
-            model="gemini-2.0-flash-001",
+            model="gemini-2.0-flash",
             contents=[prompt, file])
         foods = self.parse_food_json(response.text)
         return foods
@@ -35,21 +35,21 @@ class Predictor:
     def get_volume(self, foods):
         file = self.client.files.upload(file=self.image_path)
         prompt2 = ("You are given an image of some food that may be uneaten or partially eaten. "
-                   "Your task is to figure out the volume of the foods (in Liters) in the image and output them in JSON format. "
-                   "Your JSON response should have a key for each food and the value of each key should be the volume of that food (as a float). "
+                   "Your task is to figure out the volume of the foods (in Liters) in the image. "
                    "The foods in the images are: " + foods + "\n\n"
                    "Rules to follow in your response:\n"
                    "1. Show your thought process\n"
-                   "2. Put your JSON response in a <json> tag. "
-                   "There should only be one opening 'json' HTML tag and one closing 'json' HTML tag in your response. This is to be used when you are constructing your JSON response.\n\n"
-                   "Here is an example JSON output that I expect from you:\n"
+                   "2. After showing your thought process, format your response in JSON. Wrap this JSON in a ‘json’ html tag so that "
+                   "I can parse it easily. Your JSON response should have a key for each food and "
+                   "the value of each key should be the volume of that food (as a float).\n\n"
+                   "Format your response like this:\n"
                    "<json>{\"rice\": 0.25, \"fried tofu\": 0.33, \"fried garlic\": 0.03}</json>")
         response = self.client.models.generate_content(
             model="gemini-2.0-flash",
             contents=[prompt2, file])
-        # print("VOLUME RESPONSE")
-        # print(response.text)
-        map = parse_volume_json(response.text)
+        print("VOLUME RESPONSE")
+        print(response.text)
+        map = self.parse_volume_json(response.text)
         return response.text, map
 
     def get_weight(self, food_map):
@@ -57,24 +57,43 @@ class Predictor:
                    f"{food_map}\n\n"
                    "Given the volume of the food, find its density by multiplying it, "
                    "mathematically not programmatically, by its volume"
-                   " (volume is given in the JSON string in Liters) to get the weight of the food. "
-                   "Output your solution as a JSON formatted string where each key is the food and its value is"
-                   " the weight (as a float in grams). \n\n"
+                   " (volume is given in the JSON string in Liters) to get the weight of the food.\n\n"
                    "Rules to follow in your response:\n"
                    "1. Show your thought process\n"
-                   "2. Put your JSON response in a <json> tag. "
-                   "There should only be one opening 'json' HTML tag and one closing 'json' HTML"
-                   " tag in your response. This is to be used when you are constructing your"
-                   " JSON response.\n\n"
-                   "Here is an example JSON output that I expect from you:\n"
+                   "2. After showing your thought process, format your response in JSON. Wrap this JSON in a ‘json’ html tag so that "
+                   "I can parse it easily. Your JSON response should have a key for each food and"
+                   " the value of each key should be the weight (as a float in grams)\n\n"
+                   "Format your JSON response like this:\n"
                    "<json>{\"rice\": 100, \"fried tofu\": 120, \"fried garlic\": 80}</json>")
         response = self.client.models.generate_content(
-            model="gemini-2.0-flash-001",
+            model="gemini-2.0-flash",
             contents=[prompt2])
-        # print("WEIGHT RESPONSE")
-        # print(response.text)
-        map = parse_volume_json(response.text)
+        print("WEIGHT RESPONSE")
+        print(response.text)
+        map = self.parse_volume_json(response.text)
         return response.text, map
+
+    def get_description(self):
+        file = self.client.files.upload(file=self.image_path)
+        prompt = ("You are given an image of some food. Your goal is to analyze the food contents and "
+                  "create a suitable name for the dish as well as a brief description of the dish.\n\n"
+                  "Rules to follow in your response:\n"
+                  "1. Show your thought process\n"
+                  "2. After showing your thought process, format your response in JSON. "
+                  "Wrap this JSON in a ‘json’ html tag so that I can parse it easily. "
+                  "Your JSON response should have two keys. One key called ‘name’ with the name of "
+                  "the dish as the value and one key called ‘description’ with the description of "
+                  "the dish as the value.\n\n"
+                  "Format your JSON response like this:\n"
+                  "<json>{\”name\”: \“Dish name\”, \”description\”: \“Dish description\”}</json>")
+
+        response = self.client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[prompt, file])
+
+        map = self.parse_description_json(response.text)
+
+        return map
 
     def download_image(self):
         img_data = requests.get(self.image_path).content
@@ -113,34 +132,53 @@ class Predictor:
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON content: {e}")
 
+    def parse_volume_json(self, input_string):
+        # Regular expression to find the content inside <json> tags
+        json_pattern = re.compile(r'<json>(.*?)</json>', re.DOTALL)
 
-def parse_volume_json(input_string):
-    # Regular expression to find the content inside <json> tags
-    json_pattern = re.compile(r'<json>(.*?)</json>', re.DOTALL)
+        # Search for the JSON content within the <json> tags
+        match = json_pattern.search(input_string)
 
-    # Search for the JSON content within the <json> tags
-    match = json_pattern.search(input_string)
+        if not match:
+            raise ValueError("No <json> tag found in the input string.")
 
-    if not match:
-        raise ValueError("No <json> tag found in the input string.")
+        json_content = match.group(1).strip()
 
-    json_content = match.group(1).strip()
+        try:
+            # Parse the JSON content
+            parsed_json = json.loads(json_content)
 
-    try:
-        # Parse the JSON content
-        parsed_json = json.loads(json_content)
+            # Ensure the parsed JSON is a dictionary
+            if not isinstance(parsed_json, dict):
+                raise ValueError("The JSON content must be a dictionary.")
 
-        # Ensure the parsed JSON is a dictionary
-        if not isinstance(parsed_json, dict):
-            raise ValueError("The JSON content must be a dictionary.")
+            # Validate that all values are integers
+            for key, value in parsed_json.items():
+                if not isinstance(value, float):
+                    raise ValueError(f"The value for key '{key}' is not an float.")
 
-        # Validate that all values are integers
-        for key, value in parsed_json.items():
-            if not isinstance(value, float):
-                raise ValueError(f"The value for key '{key}' is not an float.")
+            # Return the dictionary
+            return parsed_json
 
-        # Return the dictionary
-        return parsed_json
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON content: {e}")
 
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON content: {e}")
+    def parse_description_json(self, input_string):
+        # Regular expression to find content inside <json> tags
+        json_pattern = re.compile(r'<json>\s*({.*?})\s*</json>', re.DOTALL)
+
+        # Search for the JSON content
+        match = json_pattern.search(input_string)
+
+        if match:
+            json_content = match.group(1)
+            try:
+                # Parse the JSON content into a dictionary
+                parsed_json = json.loads(json_content)
+                return parsed_json
+            except json.JSONDecodeError as e:
+                print(f"Error decoding JSON: {e}")
+                return None
+        else:
+            print("No <json> tag found in the input string.")
+            return None

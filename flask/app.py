@@ -79,6 +79,24 @@ def predict():
         'timestamp': datetime.now().isoformat()
     })
 
+@app.route('/description', methods=['POST'])
+def fullness():
+    if not request.is_json:
+        raise APIError('Content-Type must be application/json')
+
+    data = request.get_json()
+    image = data['image']
+
+    predictor = Predictor(image)
+
+    map = predictor.get_description()
+
+    return jsonify({
+        'response': map,
+        'timestamp': datetime.now().isoformat()
+    })
+
+
 if __name__ == '__main__':
     # Enable hot reloading and run on localhost
     app.run(host='0.0.0.0', port=5001, debug=True)
